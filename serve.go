@@ -133,6 +133,16 @@ func readInclude(src string) string {
 
 func main() {
 	staticHandler := http.FileServer(http.Dir("."))
+	http.HandleFunc("/archive/", archiveHandler)
+	http.HandleFunc("/posts/", archiveHandler)
+	http.HandleFunc("/episodes/", archiveHandler)
+	http.HandleFunc("/by/", archiveHandler)
+
+	langs := [...]string{"en", "zh", "ja"}
+	for i := 0; i < len(langs); i++ {
+		http.HandleFunc("/"+langs[i]+"/", archiveHandler)
+	}
+
 	http.Handle("/", serveAny(staticHandler))
 
 	port := os.Getenv("PORT")
