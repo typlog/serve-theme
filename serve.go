@@ -85,9 +85,9 @@ func sendRequest(filename string, path string) *http.Response {
 
 	var endpoint string
 	if envAPI == "" {
-		endpoint = "https://api.typlog.com/v3/design/" + filename + "/preview"
+		endpoint = "https://api.typlog.com/v3/design/preview"
 	} else {
-		endpoint = envAPI + "/v3/design/" + filename + "/preview"
+		endpoint = envAPI + "/v3/design/preview"
 	}
 	byteContent, _ := ioutil.ReadFile(filename)
 	strContent := string(byteContent)
