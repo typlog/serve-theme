@@ -53,6 +53,11 @@ func serveAny(s http.Handler) http.Handler {
 
 func renderView(filename string, w http.ResponseWriter, r *http.Request) {
 	resp := sendRequest(filename, r.URL.Path)
+	if resp == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("server error"))
+		return
+	}
 	defer resp.Body.Close()
 
 	var result resultResponse
@@ -108,7 +113,10 @@ func sendRequest(filename string, path string) *http.Response {
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Content-Length", strconv.Itoa(len(body)))
 	client := &http.Client{}
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
 	return resp
 }
 
