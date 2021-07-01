@@ -24,15 +24,18 @@ type requestPayload struct {
 	URL      string `json:"url"`
 }
 
-func archiveHandler(w http.ResponseWriter, r *http.Request) {
-	renderView("list.j2", w, r)
-}
-
 func serveAny(s http.Handler) http.Handler {
+	reArchive := regexp.MustCompile(`^/(archive|posts|episodes|en|zh|ja)/(\d{4}/)?$`)
+	reAuthor := regexp.MustCompile(`^/by/([^/])+/(\d{4}/)?$`)
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path)
 		if r.URL.Path == "/" {
 			renderView("home.j2", w, r)
+		} else if reArchive.MatchString(r.URL.Path) {
+			renderView("list.j2", w, r)
+		} else if reAuthor.MatchString(r.URL.Path) {
+			renderView("list.j2", w, r)
 		} else {
 			var isAssets bool = false
 			suffixes := [...]string{".css", ".js", ".ico", ".jpg", ".png", ".svg", ".woff", ".woff2"}
@@ -133,16 +136,6 @@ func readInclude(src string) string {
 
 func main() {
 	staticHandler := http.FileServer(http.Dir("."))
-	http.HandleFunc("/archive/", archiveHandler)
-	http.HandleFunc("/posts/", archiveHandler)
-	http.HandleFunc("/episodes/", archiveHandler)
-	http.HandleFunc("/by/", archiveHandler)
-
-	langs := [...]string{"en", "zh", "ja"}
-	for i := 0; i < len(langs); i++ {
-		http.HandleFunc("/"+langs[i]+"/", archiveHandler)
-	}
-
 	http.Handle("/", serveAny(staticHandler))
 
 	port := os.Getenv("PORT")
