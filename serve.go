@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,18 +25,18 @@ type requestPayload struct {
 	URL      string `json:"url"`
 }
 
-func serveAny(s http.Handler) http.Handler {
+func serveAny(s http.Handler, root string) http.Handler {
 	reArchive := regexp.MustCompile(`^/(archive|posts|episodes|en|zh|ja)/(\d{4}/)?$`)
 	reAuthor := regexp.MustCompile(`^/by/([^/])+/(\d{4}/)?$`)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path)
 		if r.URL.Path == "/" {
-			renderView("home.j2", w, r)
+			renderView(root, "home.j2", w, r)
 		} else if reArchive.MatchString(r.URL.Path) {
-			renderView("list.j2", w, r)
+			renderView(root, "list.j2", w, r)
 		} else if reAuthor.MatchString(r.URL.Path) {
-			renderView("list.j2", w, r)
+			renderView(root, "list.j2", w, r)
 		} else {
 			var isAssets bool = false
 			suffixes := [...]string{".css", ".js", ".ico", ".jpg", ".png", ".svg", ".woff", ".woff2"}
@@ -48,14 +49,14 @@ func serveAny(s http.Handler) http.Handler {
 			if isAssets {
 				s.ServeHTTP(w, r)
 			} else {
-				renderView("item.j2", w, r)
+				renderView(root, "item.j2", w, r)
 			}
 		}
 	})
 }
 
-func renderView(filename string, w http.ResponseWriter, r *http.Request) {
-	resp := sendRequest(filename, r.URL.Path)
+func renderView(root string, filename string, w http.ResponseWriter, r *http.Request) {
+	resp := sendRequest(root, filename, r.URL.Path)
 	if resp == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("server error"))
@@ -81,7 +82,7 @@ func renderView(filename string, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func sendRequest(filename string, path string) *http.Response {
+func sendRequest(root string, filename string, path string) *http.Response {
 	envAPI := os.Getenv("API")
 	token := os.Getenv("TOKEN")
 	siteId := os.Getenv("SITE")
@@ -92,15 +93,24 @@ func sendRequest(filename string, path string) *http.Response {
 	} else {
 		endpoint = envAPI + "/v3/design/preview"
 	}
-	byteContent, _ := ioutil.ReadFile(filename)
+	byteContent, _ := ioutil.ReadFile(filepath.Join(root, filename))
 	strContent := string(byteContent)
 
 	// {{ static_url }} -> /
 	reStatic := regexp.MustCompile(`\{\{\s*static_url\s*\}\}`)
 	strContent2 := reStatic.ReplaceAllString(strContent, "/")
 
-	// {% include gh:typlog/ueno/_side.j2 %}
-	reInclude := regexp.MustCompile(`{% include\s+("|')gh:[^/]+/[^/]+/(.+\.j2)("|')\s+%}`)
+	// {% include "./_side.j2" %}
+	reInclude := regexp.MustCompile(`{% include\s+("|')\./(.+\.j2)("|')\s+%}`)
+	var readInclude = func(src string) string {
+		names := reInclude.FindStringSubmatch(src)
+		content, err := ioutil.ReadFile(filepath.Join(root, names[2]))
+		if err == nil {
+			return string(content)
+		} else {
+			return "<pre>**ERROR**: <code>{% raw %}" + src + "{% endraw %}</code></pre>"
+		}
+	}
 	strContent3 := reInclude.ReplaceAllStringFunc(strContent2, readInclude)
 
 	byteBody, _ := json.Marshal(requestPayload{
@@ -123,26 +133,19 @@ func sendRequest(filename string, path string) *http.Response {
 	return resp
 }
 
-func readInclude(src string) string {
-	re := regexp.MustCompile(`gh:[^/]+/[^/]+/(.+\.j2)`)
-	names := re.FindStringSubmatch(src)
-	content, err := ioutil.ReadFile(names[1])
-	if err == nil {
-		return string(content)
-	} else {
-		return "<pre>**ERROR**: <code>{% raw %}" + src + "{% endraw %}</code></pre>"
-	}
-}
-
 func main() {
-	staticHandler := http.FileServer(http.Dir("."))
-	http.Handle("/", serveAny(staticHandler))
+	root := "."
+	if len(os.Args) > 1 {
+		root = os.Args[1]
+	}
+	staticHandler := http.FileServer(http.Dir(root))
+	http.Handle("/", serveAny(staticHandler, root))
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "7000"
 	}
 
-	log.Println("Listening on port " + port)
+	log.Println("Listening " + root + " on port " + port)
 	log.Fatal(http.ListenAndServe("localhost:"+port, nil))
 }
