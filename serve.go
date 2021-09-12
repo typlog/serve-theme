@@ -27,6 +27,7 @@ type requestPayload struct {
 
 func serveAny(s http.Handler, root string) http.Handler {
 	reArchive := regexp.MustCompile(`^/(archive|posts|episodes|en|zh|ja)/(\d{4}/)?$`)
+	reTag := regexp.MustCompile(`^/tags/([^/]+)`)
 	reAuthor := regexp.MustCompile(`^/by/([^/])+/(\d{4}/)?$`)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +35,8 @@ func serveAny(s http.Handler, root string) http.Handler {
 		if r.URL.Path == "/" {
 			renderView(root, "home.j2", w, r)
 		} else if reArchive.MatchString(r.URL.Path) {
+			renderView(root, "list.j2", w, r)
+		} else if reTag.MatchString(r.URL.Path) {
 			renderView(root, "list.j2", w, r)
 		} else if reAuthor.MatchString(r.URL.Path) {
 			renderView(root, "list.j2", w, r)
