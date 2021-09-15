@@ -18,7 +18,10 @@ jobs:
       run: go get github.com/mitchellh/gox
 
     - name: Build
-      run: gox -output "dist/{{.OS}}_{{.Arch}}_{{.Dir}}"
+      run: gox -osarch '!darwin/386' -output "dist/{{.OS}}_{{.Arch}}_{{.Dir}}"
+
+    - name: Check
+      run: ls dist/
 
     - uses: actions/upload-artifact@v2
       with:
