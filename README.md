@@ -5,7 +5,7 @@ Here are the steps to use this tool:
 1. Create a personal token with your Typlog accounts
 2. Find out one of your Typlog site ID
 
-For example, you have created a personal token: `pt_axOz97`, and your site ID is `123`.
+For example, you have created an API token: `pt_axOz97`, and your site ID is `123`.
 Head over to  your theme repo:
 
 ```
