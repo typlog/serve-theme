@@ -128,6 +128,7 @@ func sendRequest(root string, filename string, path string) *http.Response {
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	req.Header.Set("User-Agent", "ServeTheme/0.2")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
