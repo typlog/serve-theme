@@ -12,6 +12,15 @@ import (
 	"strings"
 )
 
+type configResponse struct {
+	ListURL      string `json:"list_permalink"`
+	LangURL      string `json:"lang_permalink"`
+	TagURL       string `json:"tag_permalink"`
+	AuthorURL    string `json:"author_permalink"`
+	PostListURL  string `json:"post_list_permalink"`
+	AudioListURL string `json:"audio_list_permalink"`
+}
+
 type resultResponse struct {
 	Status  string  `json:"status"`
 	Message string  `json:"message"`
@@ -26,20 +35,38 @@ type requestPayload struct {
 }
 
 func serveAny(s http.Handler, root string) http.Handler {
-	reArchive := regexp.MustCompile(`^/(archive|posts|episodes|en|zh|ja)/(\d{4}/)?$`)
-	reTag := regexp.MustCompile(`^/tags/([^/]+)`)
-	reAuthor := regexp.MustCompile(`^/by/([^/])+/(\d{4}/)?$`)
+	resp := request("GET", "site/config", "")
+
+	if resp == nil {
+		log.Fatal("Cannot fetch site configuration.")
+	}
+	defer resp.Body.Close()
+
+	var config configResponse
+	err := json.NewDecoder(resp.Body).Decode(&config)
+	if err != nil {
+		log.Fatal("Cannot parse site configuration.")
+	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.URL.Path)
 		if r.URL.Path == "/" {
-			renderView(root, "home.j2", w, r)
-		} else if reArchive.MatchString(r.URL.Path) {
-			renderView(root, "list.j2", w, r)
-		} else if reTag.MatchString(r.URL.Path) {
-			renderView(root, "list.j2", w, r)
-		} else if reAuthor.MatchString(r.URL.Path) {
-			renderView(root, "list.j2", w, r)
+			renderView(root, "home.j2", "", w, r)
+		} else if strings.HasPrefix(r.URL.Path, "/-/") {
+			w.WriteHeader(http.StatusNoContent)
+			w.Write([]byte(""))
+		} else if matchListRoute(config.ListURL, r.URL.Path) {
+			renderView(root, "list.j2", "", w, r)
+		} else if matchListRoute(config.PostListURL, r.URL.Path) {
+			renderView(root, "post_list.j2", "list.j2", w, r)
+		} else if matchListRoute(config.AudioListURL, r.URL.Path) {
+			renderView(root, "audio_list.j2", "list.j2", w, r)
+		} else if matchLangRoute(config.LangURL, r.URL.Path) {
+			renderView(root, "lang.j2", "list.j2", w, r)
+		} else if matchTagRoute(config.TagURL, r.URL.Path) {
+			renderView(root, "tag.j2", "list.j2", w, r)
+		} else if matchAuthorRoute(config.AuthorURL, r.URL.Path) {
+			renderView(root, "author.j2", "list.j2", w, r)
 		} else {
 			var isAssets bool = false
 			suffixes := [...]string{".css", ".js", ".ico", ".jpg", ".png", ".svg", ".woff", ".woff2"}
@@ -52,52 +79,50 @@ func serveAny(s http.Handler, root string) http.Handler {
 			if isAssets {
 				s.ServeHTTP(w, r)
 			} else {
-				renderView(root, "item.j2", w, r)
+				renderView(root, "item.j2", "", w, r)
 			}
 		}
 	})
 }
 
-func renderView(root string, filename string, w http.ResponseWriter, r *http.Request) {
-	resp := sendRequest(root, filename, r.URL.Path)
-	if resp == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("server error"))
-		return
+func matchListRoute(permalink string, path string) bool {
+	if path == permalink {
+		return true
 	}
-	defer resp.Body.Close()
-
-	var result resultResponse
-	err := json.NewDecoder(resp.Body).Decode(&result)
-	if err == nil {
-		if result.Status == "ok" {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(result.HTML))
-			log.Println("RENDER: " + r.URL.Path + " - " + strconv.FormatFloat(result.Time, 'f', 5, 64) + "ms")
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(result.Message))
-		}
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("unknown error"))
-		log.Println(err)
-	}
+	reRoute := regexp.MustCompile("^" + permalink + `\d{4}/$`)
+	return reRoute.MatchString(path)
 }
 
-func sendRequest(root string, filename string, path string) *http.Response {
-	envAPI := os.Getenv("API")
-	token := os.Getenv("TOKEN")
-	siteId := os.Getenv("SITE")
+func matchLangRoute(permalink string, path string) bool {
+	langPath := strings.Replace(permalink, "{lang}", "(en|zh|ja|zh-hans|zh-hant|es)", 1)
+	reRoute := regexp.MustCompile("^" + langPath + `(\d{4}/)?$`)
+	return reRoute.MatchString(path)
+}
 
-	var endpoint string
-	if envAPI == "" {
-		endpoint = "https://api.typlog.com/v3/design/preview"
+func matchTagRoute(permalink string, path string) bool {
+	langPath := strings.Replace(permalink, "{lang}", "(en|zh|ja|zh-hans|zh-hant|es)", 1)
+	tagPath := strings.Replace(langPath, "{slug}", "[a-z0-9-%]+", 1)
+	reRoute := regexp.MustCompile("^" + tagPath + `(\d{4}/)?$`)
+	return reRoute.MatchString(path)
+}
+
+func matchAuthorRoute(permalink string, path string) bool {
+	authorPath := strings.Replace(permalink, "{username}", "[a-z0-9-%]+", 1)
+	reRoute := regexp.MustCompile("^" + authorPath + `(\d{4}/)?$`)
+	return reRoute.MatchString(path)
+}
+
+func renderView(root string, filename string, fallback string, w http.ResponseWriter, r *http.Request) {
+	var strContent string
+	var template string = filename
+	byteContent, err1 := ioutil.ReadFile(filepath.Join(root, filename))
+	if err1 != nil && fallback != "" {
+		template = fallback
+		fallbackContent, _ := ioutil.ReadFile(filepath.Join(root, fallback))
+		strContent = string(fallbackContent)
 	} else {
-		endpoint = envAPI + "/v3/design/preview"
+		strContent = string(byteContent)
 	}
-	byteContent, _ := ioutil.ReadFile(filepath.Join(root, filename))
-	strContent := string(byteContent)
 
 	// {{ static_url }} -> /
 	reStatic := regexp.MustCompile(`\{\{\s*static_url\s*\}\}`)
@@ -116,18 +141,62 @@ func sendRequest(root string, filename string, path string) *http.Response {
 	}
 	strContent3 := reInclude.ReplaceAllStringFunc(strContent2, readInclude)
 
+	var _filename string = filename
+	if fallback != "" {
+		_filename = fallback
+	}
 	byteBody, _ := json.Marshal(requestPayload{
-		Filename: filename,
-		URL:      path,
+		Filename: _filename,
+		URL:      r.URL.Path,
 		Code:     strContent3,
 	})
-	body := string(byteBody)
+	resp := request("POST", "design/preview", string(byteBody))
 
-	req, _ := http.NewRequest("POST", endpoint, strings.NewReader(body))
+	if resp == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("server error"))
+		return
+	}
+	defer resp.Body.Close()
+
+	var result resultResponse
+	err2 := json.NewDecoder(resp.Body).Decode(&result)
+	if err2 == nil {
+		if result.Status == "ok" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(result.HTML))
+			log.Println("RENDER: [" + template + "] " + r.URL.Path + " - " + strconv.FormatFloat(result.Time, 'f', 5, 64) + "ms")
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(result.Message))
+			log.Println("RENDER: [" + template + "] " + r.URL.Path)
+		}
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("unknown error"))
+		log.Println(err2)
+	}
+}
+
+func request(method string, path string, body string) *http.Response {
+	envAPI := os.Getenv("API")
+	token := os.Getenv("TOKEN")
+	siteId := os.Getenv("SITE")
+
+	var endpoint string
+	if envAPI == "" {
+		endpoint = "https://api.typlog.com/v3/"
+	} else {
+		endpoint = envAPI + "/v3/"
+	}
+
+	req, _ := http.NewRequest(method, endpoint+path, strings.NewReader(body))
 	req.Header.Add("X-Site-Id", siteId)
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	if body != "" {
+		req.Header.Add("Content-Length", strconv.Itoa(len(body)))
+	}
 	req.Header.Set("User-Agent", "ServeTheme/0.2")
 	client := &http.Client{}
 	resp, err := client.Do(req)
