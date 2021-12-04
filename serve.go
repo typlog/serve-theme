@@ -35,7 +35,7 @@ type requestPayload struct {
 }
 
 func serveAny(s http.Handler, root string) http.Handler {
-	resp := request("GET", "site/config", "")
+	resp := request("GET", "design/config", "")
 
 	if resp == nil {
 		log.Fatal("Cannot fetch site configuration.")
