@@ -124,10 +124,6 @@ func renderView(root string, filename string, fallback string, w http.ResponseWr
 		strContent = string(byteContent)
 	}
 
-	// {{ static_url }} -> /
-	reStatic := regexp.MustCompile(`\{\{\s*static_url\s*\}\}`)
-	strContent2 := reStatic.ReplaceAllString(strContent, "/")
-
 	// {% include "./_side.j2" %}
 	reInclude := regexp.MustCompile(`{% include\s+("|')\./(.+\.j2)("|')\s+%}`)
 	var readInclude = func(src string) string {
@@ -139,7 +135,12 @@ func renderView(root string, filename string, fallback string, w http.ResponseWr
 			return "<pre>**ERROR**: <code>{% raw %}" + src + "{% endraw %}</code></pre>"
 		}
 	}
-	strContent3 := reInclude.ReplaceAllStringFunc(strContent2, readInclude)
+	strContent2 := reInclude.ReplaceAllStringFunc(strContent, readInclude)
+
+	// {{ static_url }} -> /
+	reStatic := regexp.MustCompile(`\{\{\s*static_url\s*\}\}`)
+	strContent3 := reStatic.ReplaceAllString(strContent2, "/")
+
 
 	var _filename string = filename
 	if fallback != "" {
@@ -220,5 +221,5 @@ func main() {
 	}
 
 	log.Println("Listening " + root + " on port " + port)
-	log.Fatal(http.ListenAndServe("localhost:"+port, nil))
+	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
 }
