@@ -141,7 +141,6 @@ func renderView(root string, filename string, fallback string, w http.ResponseWr
 	reStatic := regexp.MustCompile(`\{\{\s*static_url\s*\}\}`)
 	strContent3 := reStatic.ReplaceAllString(strContent2, "/")
 
-
 	var _filename string = filename
 	if fallback != "" {
 		_filename = fallback
@@ -151,7 +150,10 @@ func renderView(root string, filename string, fallback string, w http.ResponseWr
 		URL:      r.URL.Path,
 		Code:     strContent3,
 	})
-	resp := request("POST", "design/preview", string(byteBody))
+	strBody := string(byteBody)
+	byteTheme, _ := ioutil.ReadFile(filepath.Join(root, "theme.json"))
+	strBody = strBody[0:len(strBody)-1] + ",\"theme\":" + string(byteTheme) + "}"
+	resp := request("POST", "design/preview", strBody)
 
 	if resp == nil {
 		w.WriteHeader(http.StatusBadRequest)
