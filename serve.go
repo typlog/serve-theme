@@ -200,7 +200,7 @@ func request(method string, path string, body string) *http.Response {
 	if body != "" {
 		req.Header.Add("Content-Length", strconv.Itoa(len(body)))
 	}
-	req.Header.Set("User-Agent", "ServeTheme/0.3")
+	req.Header.Set("User-Agent", "ServeTheme/0.4")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
