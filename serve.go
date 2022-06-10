@@ -19,6 +19,9 @@ type configResponse struct {
 	AuthorURL    string `json:"author_permalink"`
 	PostListURL  string `json:"post_list_permalink"`
 	AudioListURL string `json:"audio_list_permalink"`
+	PageItemURL  string `json:"page_item_permalink"`
+	AudioItemURL string `json:"audio_item_permalink"`
+	PostItemURL  string `json:"post_item_permalink"`
 }
 
 type resultResponse struct {
@@ -67,6 +70,12 @@ func serveAny(s http.Handler, root string) http.Handler {
 			renderView(root, "tag.j2", "list.j2", w, r)
 		} else if matchAuthorRoute(config.AuthorURL, r.URL.Path) {
 			renderView(root, "author.j2", "list.j2", w, r)
+		} else if matchItemRoute(config.PageItemURL, r.URL.Path) {
+			renderView(root, "page_item.j2", "item.j2", w, r)
+		} else if matchItemRoute(config.PostItemURL, r.URL.Path) {
+			renderView(root, "post_item.j2", "item.j2", w, r)
+		} else if matchItemRoute(config.AudioItemURL, r.URL.Path) {
+			renderView(root, "audio_item.j2", "item.j2", w, r)
 		} else {
 			var isAssets bool = false
 			suffixes := [...]string{".css", ".js", ".ico", ".jpg", ".png", ".svg", ".woff", ".woff2"}
@@ -111,6 +120,15 @@ func matchAuthorRoute(permalink string, path string) bool {
 	reRoute := regexp.MustCompile("^" + authorPath + `(\d{4}/)?$`)
 	return reRoute.MatchString(path)
 }
+
+func matchItemRoute(permalink string, path string) bool {
+	langPath := strings.Replace(permalink, "{lang}", "(en|zh|ja|zh-hans|zh-hant|es)", 1)
+	yearPath := strings.Replace(langPath, "{year}", `(\d{4})`, 1)
+	slugPath := strings.Replace(yearPath, "{slug}", "[a-z0-9-%]+", 1)
+	reRoute := regexp.MustCompile("^" + slugPath + "$")
+	return reRoute.MatchString(path)
+}
+
 
 func renderView(root string, filename string, fallback string, w http.ResponseWriter, r *http.Request) {
 	var strContent string
